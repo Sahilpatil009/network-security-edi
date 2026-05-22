@@ -1,0 +1,8 @@
+[2026-05-22 11:31:55,902] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/user "HTTP/1.1 200 OK"
+[2026-05-22 11:31:55,913] 107dagshub - INFO - Accessing as Sahilpatil009
+[2026-05-22 11:31:57,411] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/repos/Sahilpatil009/network-security-edi "HTTP/1.1 404 Not Found"
+[2026-05-22 11:31:58,750] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/user "HTTP/1.1 200 OK"
+[2026-05-22 11:31:58,754] 107dagshub - INFO - Repository network-security-edi doesn't exist, creating it under current user.
+[2026-05-22 11:32:00,189] 1025httpx - INFO - HTTP Request: POST https://dagshub.com/api/v1/user/repos "HTTP/1.1 201 Created"
+[2026-05-22 11:32:00,190] 107dagshub - INFO - Initialized MLflow to track repo "Sahilpatil009/network-security-edi"
+[2026-05-22 11:32:00,191] 107dagshub - INFO - Repository Sahilpatil009/network-security-edi initialized!

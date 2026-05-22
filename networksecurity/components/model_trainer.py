@@ -87,7 +87,7 @@ class ModelTrainer:
             
         }
         model_report:dict=evaluate_models(X_train=X_train,y_train=y_train,X_test=x_test,y_test=y_test,
-                                          models=models,param=params)
+                                        models=models,param=params)
         
         ## To get best model score from dict
         best_model_score = max(sorted(model_report.values()))
@@ -124,9 +124,9 @@ class ModelTrainer:
 
         ## Model Trainer Artifact
         model_trainer_artifact=ModelTrainerArtifact(trained_model_file_path=self.model_trainer_config.trained_model_file_path,
-                             train_metric_artifact=classification_train_metric,
-                             test_metric_artifact=classification_test_metric
-                             )
+                            train_metric_artifact=classification_train_metric,
+                            test_metric_artifact=classification_test_metric
+                            )
         logging.info(f"Model trainer artifact: {model_trainer_artifact}")
         return model_trainer_artifact
 
