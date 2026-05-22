@@ -5,8 +5,7 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
-MONGO_DB_URL=os.getenv("MONGO_DB_URL")
-print(MONGO_DB_URL)
+MONGO_DB_URL=os.getenv("MONGO_DB_URL") or os.getenv("MONGODB_URL_KEY")
 ##certi is python package that provides set of root certificates
 ##used to make secure http connection we are making http connection between mongodb
 ##we will do requests so it ensures that it only trusts this certifcates
@@ -18,6 +17,10 @@ import numpy as np
 import pymongo
 from networksecurity.exception.exception import NetworkSecurityException
 from networksecurity.logging.logger import logging
+from networksecurity.constants.training_pipeline import (
+    DATA_INGESTION_COLLECTION_NAME,
+    DATA_INGESTION_DATABASE_NAME,
+)
 
 class NetworkDataExtract():
     def __init__(self):
@@ -41,7 +44,10 @@ class NetworkDataExtract():
             self.collection=collection
             self.records=records
 
-            self.mongo_client=pymongo.MongoClient(MONGO_DB_URL)
+            mongo_kwargs = {}
+            if MONGO_DB_URL and MONGO_DB_URL.lower().startswith("mongodb+srv://"):
+                mongo_kwargs["tlsCAFile"] = ca
+            self.mongo_client=pymongo.MongoClient(MONGO_DB_URL, **mongo_kwargs) if MONGO_DB_URL else pymongo.MongoClient()
             self.database=self.mongo_client[self.database]
             self.collection=self.database[self.collection]
             self.collection.insert_many(self.records)
@@ -50,11 +56,10 @@ class NetworkDataExtract():
             raise NetworkSecurityException(e,sys)
         
 if __name__=='__main__':
-    FILE_PATH="Network_Data\phisingData.csv"
-    DATABASE="SANSKAR"
-    Collection="Networkdata"
+    FILE_PATH=os.path.join("Network_Data", "phisingData.csv")
+    DATABASE=DATA_INGESTION_DATABASE_NAME
+    Collection=DATA_INGESTION_COLLECTION_NAME
     newtworkobj=NetworkDataExtract()
     records=newtworkobj.csv_to_json_convertor(file_path=FILE_PATH)
-    print(records)
     no_of_records=newtworkobj.insert_data_mongodb(records,DATABASE,Collection)
-    print(no_of_records)
+    print(f"Inserted {no_of_records} records into {DATABASE}.{Collection}")
