@@ -87,7 +87,7 @@
 
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 12px;
             margin-bottom: 18px;
         }
@@ -202,13 +202,18 @@
             gap: 12px;
         }
 
-        input[type="file"] {
+        input[type="file"],
+        input[type="url"] {
             width: 100%;
             border: 1px solid var(--line);
             border-radius: 6px;
             background: #ffffff;
             padding: 10px;
             color: var(--text);
+        }
+
+        input[type="url"] {
+            min-height: 42px;
         }
 
         .button-row {
@@ -352,18 +357,37 @@
                     <span class="badge {{ OUTPUT_STATUS_CLASS }}">{{ OUTPUT_STATUS }}</span>
                     <div class="status-meta">{{ OUTPUT_META }}</div>
                 </article>
+
+                <article class="status-card">
+                    <div>
+                        <div class="status-label">Gemini</div>
+                        <div class="status-value">{{ GEMINI_STATUS }}</div>
+                    </div>
+                    <span class="badge {{ GEMINI_STATUS_CLASS }}">{{ GEMINI_STATUS }}</span>
+                    <div class="status-meta">{{ GEMINI_META }}</div>
+                </article>
             </section>
 
             <section class="main-grid">
                 <article class="tool-panel">
                     <div class="section-title">
                         <div>
-                            <h1>Run a batch prediction</h1>
-                            <p>Upload a phishing dataset CSV with the same feature columns used during training.</p>
+                            <h1>Check a website URL</h1>
+                            <p>Enter a website URL to extract phishing features, run the model, and generate a Gemini summary.</p>
                         </div>
                     </div>
 
-                    <form class="upload-box" action="/predict" method="post" enctype="multipart/form-data">
+                    <form class="upload-box" action="/predict-url" method="post">
+                        <label for="url" class="muted">Website URL</label>
+                        <input id="url" name="url" type="url" placeholder="https://example.com/login" required>
+                        <div class="button-row">
+                            <button class="button primary" type="submit">Analyze URL</button>
+                        </div>
+                    </form>
+
+                    <form class="upload-box task-row" action="/predict" method="post" enctype="multipart/form-data">
+                        <h2>Run a batch prediction</h2>
+                        <p class="muted">Upload a CSV with the same feature columns used during training.</p>
                         <label for="file" class="muted">CSV file</label>
                         <input id="file" name="file" type="file" accept=".csv,text/csv" required>
                         <div class="button-row">
