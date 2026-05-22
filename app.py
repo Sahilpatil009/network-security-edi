@@ -179,34 +179,122 @@ def predict_dataframe(input_df: pd.DataFrame):
     return network_model.predict(input_df)
 
 
-@app.get("/", tags=["ui"])
-async def index():
+def build_url_prediction(url: str) -> dict:
+    feature_df, features, metadata = extract_url_features(url)
+    y_pred = predict_dataframe(feature_df)
+    prediction = int(y_pred[0])
+    label = prediction_label(prediction)
+    summary = explain_prediction_with_gemini(
+        metadata["normalized_url"],
+        label,
+        features,
+        metadata,
+    )
+    suspicious_count = sum(1 for value in features.values() if value == -1)
+    neutral_count = sum(1 for value in features.values() if value == 0)
+    normal_count = sum(1 for value in features.values() if value == 1)
+    confidence = max(52, min(96, 86 - suspicious_count * 4 + normal_count))
+
+    return {
+        "url": metadata["normalized_url"],
+        "finalUrl": metadata["final_url"],
+        "hostname": metadata["hostname"],
+        "dnsStatus": metadata["dns_status"],
+        "htmlStatus": metadata["html_status"],
+        "prediction": prediction,
+        "label": label,
+        "statusClass": prediction_class(prediction),
+        "confidence": confidence,
+        "summary": summary,
+        "signals": {
+            "suspicious": suspicious_count,
+            "neutral": neutral_count,
+            "normal": normal_count,
+        },
+        "features": [
+            {
+                "name": name,
+                "value": value,
+                "signal": "Suspicious" if value == -1 else "Neutral" if value == 0 else "Normal",
+            }
+            for name, value in features.items()
+        ],
+    }
+
+
+def build_status_payload() -> dict:
     model_ready = MODEL_PATH.exists() and PREPROCESSOR_PATH.exists()
     mongo_ready = bool(mongo_db_url)
     sample_ready = SAMPLE_DATA_PATH.exists()
     output_ready = PREDICTION_OUTPUT_PATH.exists()
+    return {
+        "model": {
+            "status": "Ready" if model_ready else "Missing",
+            "ready": model_ready,
+            "meta": file_meta(MODEL_PATH),
+        },
+        "preprocessor": {
+            "status": "Ready" if PREPROCESSOR_PATH.exists() else "Missing",
+            "ready": PREPROCESSOR_PATH.exists(),
+            "meta": file_meta(PREPROCESSOR_PATH),
+        },
+        "mongo": {
+            "status": "Configured" if mongo_ready else "Missing",
+            "ready": mongo_ready,
+            "meta": mongo_db_url or "Set MONGODB_URL_KEY in .env",
+        },
+        "sampleData": {
+            "status": "Available" if sample_ready else "Missing",
+            "ready": sample_ready,
+            "meta": file_meta(SAMPLE_DATA_PATH),
+        },
+        "output": {
+            "status": "Available" if output_ready else "No predictions yet",
+            "ready": output_ready,
+            "meta": file_meta(PREDICTION_OUTPUT_PATH),
+        },
+        "gemini": {
+            "status": "Configured" if GEMINI_API_KEY else "Missing",
+            "ready": bool(GEMINI_API_KEY),
+            "meta": GEMINI_MODEL if GEMINI_API_KEY else "Set GEMINI_API_KEY in .env",
+        },
+        "repo": {
+            "name": f"{DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}",
+            "url": f"https://dagshub.com/{DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}",
+        },
+    }
+
+
+@app.get("/", tags=["ui"])
+async def index():
+    status_payload = build_status_payload()
 
     return render_template(
         "index.html",
-        MODEL_STATUS="Ready" if model_ready else "Missing",
-        MODEL_STATUS_CLASS=status_class(model_ready),
-        MODEL_META=escape(file_meta(MODEL_PATH)),
-        PREPROCESSOR_META=escape(file_meta(PREPROCESSOR_PATH)),
-        MONGO_STATUS="Configured" if mongo_ready else "Missing",
-        MONGO_STATUS_CLASS=status_class(mongo_ready),
-        MONGO_META=escape(mongo_db_url or "Set MONGODB_URL_KEY in .env"),
-        SAMPLE_STATUS="Available" if sample_ready else "Missing",
-        SAMPLE_STATUS_CLASS=status_class(sample_ready),
-        SAMPLE_META=escape(file_meta(SAMPLE_DATA_PATH)),
-        OUTPUT_STATUS="Available" if output_ready else "No predictions yet",
-        OUTPUT_STATUS_CLASS=status_class(output_ready),
-        OUTPUT_META=escape(file_meta(PREDICTION_OUTPUT_PATH)),
-        DAGSHUB_REPO=escape(f"{DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}"),
-        DAGSHUB_URL=escape(f"https://dagshub.com/{DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}"),
-        GEMINI_STATUS="Configured" if GEMINI_API_KEY else "Missing",
-        GEMINI_STATUS_CLASS=status_class(bool(GEMINI_API_KEY)),
-        GEMINI_META=escape(GEMINI_MODEL if GEMINI_API_KEY else "Set GEMINI_API_KEY in .env"),
+        MODEL_STATUS=status_payload["model"]["status"],
+        MODEL_STATUS_CLASS=status_class(status_payload["model"]["ready"]),
+        MODEL_META=escape(status_payload["model"]["meta"]),
+        PREPROCESSOR_META=escape(status_payload["preprocessor"]["meta"]),
+        MONGO_STATUS=status_payload["mongo"]["status"],
+        MONGO_STATUS_CLASS=status_class(status_payload["mongo"]["ready"]),
+        MONGO_META=escape(status_payload["mongo"]["meta"]),
+        SAMPLE_STATUS=status_payload["sampleData"]["status"],
+        SAMPLE_STATUS_CLASS=status_class(status_payload["sampleData"]["ready"]),
+        SAMPLE_META=escape(status_payload["sampleData"]["meta"]),
+        OUTPUT_STATUS=status_payload["output"]["status"],
+        OUTPUT_STATUS_CLASS=status_class(status_payload["output"]["ready"]),
+        OUTPUT_META=escape(status_payload["output"]["meta"]),
+        DAGSHUB_REPO=escape(status_payload["repo"]["name"]),
+        DAGSHUB_URL=escape(status_payload["repo"]["url"]),
+        GEMINI_STATUS=status_payload["gemini"]["status"],
+        GEMINI_STATUS_CLASS=status_class(status_payload["gemini"]["ready"]),
+        GEMINI_META=escape(status_payload["gemini"]["meta"]),
     )
+
+
+@app.get("/api/status")
+async def api_status():
+    return build_status_payload()
 
 @app.get("/train")
 async def train_route():
@@ -289,28 +377,20 @@ async def predict_route(file: UploadFile = File(...)):
 @app.post("/predict-url")
 async def predict_url_route(url: str = Form(...)):
     try:
-        feature_df, features, metadata = extract_url_features(url)
-        y_pred = predict_dataframe(feature_df)
-        prediction = int(y_pred[0])
-        label = prediction_label(prediction)
-        summary = explain_prediction_with_gemini(
-            metadata["normalized_url"],
-            label,
-            features,
-            metadata,
-        )
+        result = build_url_prediction(url)
+        features = {feature["name"]: feature["value"] for feature in result["features"]}
 
         return render_template(
             "url_result.html",
-            URL=escape(metadata["normalized_url"]),
-            FINAL_URL=escape(metadata["final_url"]),
-            HOSTNAME=escape(metadata["hostname"]),
-            DNS_STATUS=escape(metadata["dns_status"]),
-            HTML_STATUS=escape(metadata["html_status"]),
-            RESULT_LABEL=escape(label),
-            RESULT_CLASS=prediction_class(prediction),
-            RESULT_VALUE=str(prediction),
-            GEMINI_SUMMARY=escape(summary),
+            URL=escape(result["url"]),
+            FINAL_URL=escape(result["finalUrl"]),
+            HOSTNAME=escape(result["hostname"]),
+            DNS_STATUS=escape(result["dnsStatus"]),
+            HTML_STATUS=escape(result["htmlStatus"]),
+            RESULT_LABEL=escape(result["label"]),
+            RESULT_CLASS=result["statusClass"],
+            RESULT_VALUE=str(result["prediction"]),
+            GEMINI_SUMMARY=escape(result["summary"]),
             FEATURE_ROWS=feature_rows(features),
         )
     except Exception as e:
@@ -326,6 +406,48 @@ async def predict_url_route(url: str = Form(...)):
             SECONDARY_ACTION="/docs",
             SECONDARY_LABEL="Open API docs",
         )
+
+
+@app.post("/api/predict-url")
+async def api_predict_url(url: str = Form(...)):
+    try:
+        return build_url_prediction(url)
+    except Exception as e:
+        error = NetworkSecurityException(e, sys)
+        return {
+            "error": str(error),
+            "message": "The website URL could not be converted into model features.",
+        }
+
+
+@app.post("/api/predict-csv")
+async def api_predict_csv(file: UploadFile = File(...)):
+    try:
+        df = pd.read_csv(file.file)
+        input_df = df.drop(columns=[TARGET_COLUMN], errors="ignore")
+        y_pred = predict_dataframe(input_df)
+        df["predicted_column"] = y_pred
+
+        PREDICTION_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(PREDICTION_OUTPUT_PATH, index=False)
+
+        predicted_counts = df["predicted_column"].value_counts().to_dict()
+        preview = df.head(8).to_dict(orient="records")
+        return {
+            "fileName": file.filename or "Uploaded CSV",
+            "rows": len(df),
+            "columns": len(df.columns),
+            "phishing": int(predicted_counts.get(0, 0)),
+            "legitimate": int(predicted_counts.get(1, 0)),
+            "outputMeta": file_meta(PREDICTION_OUTPUT_PATH),
+            "preview": preview,
+        }
+    except Exception as e:
+        error = NetworkSecurityException(e, sys)
+        return {
+            "error": str(error),
+            "message": "The CSV could not be processed.",
+        }
 
 
 @app.get("/download-output")
