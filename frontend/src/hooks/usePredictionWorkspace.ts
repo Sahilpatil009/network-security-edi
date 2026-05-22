@@ -1,9 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
-import { getModelComparison, getPredictionHistory, getStatus, mockModelComparison, mockStatus, predictCsv, predictUrl } from "../lib/api";
+import {
+  getCurrentUser,
+  getModelComparison,
+  getPredictionHistory,
+  getStatus,
+  login,
+  logout,
+  mockModelComparison,
+  mockStatus,
+  predictCsv,
+  predictUrl,
+  signup,
+} from "../lib/api";
 import { signalColors } from "../lib/ui-data";
-import type { AppStatus, CsvPrediction, ModelComparisonReport, UrlPrediction } from "../lib/types";
+import type { AppStatus, AuthCredentials, AuthUser, CsvPrediction, ModelComparisonReport, UrlPrediction } from "../lib/types";
 
 type ActiveResult = "empty" | "url" | "csv";
 
@@ -15,23 +27,51 @@ function usePredictionWorkspace() {
   const [csvResult, setCsvResult] = useState<CsvPrediction | null>(null);
   const [activeResult, setActiveResult] = useState<ActiveResult>("empty");
   const [history, setHistory] = useState<UrlPrediction[]>([]);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isCheckingUrl, setIsCheckingUrl] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  const resetProtectedWorkspace = useCallback(() => {
+    setStatus(mockStatus);
+    setModelComparison(mockModelComparison);
+    setHistory([]);
+    setUrlResult(null);
+    setCsvResult(null);
+    setActiveResult("empty");
+  }, []);
+
+  const loadProtectedWorkspace = useCallback(async () => {
+    const [nextStatus, nextModelComparison, nextHistory] = await Promise.all([
+      getStatus().catch(() => mockStatus),
+      getModelComparison().catch(() => mockModelComparison),
+      getPredictionHistory(20).catch(() => []),
+    ]);
+
+    setStatus(nextStatus);
+    setModelComparison(nextModelComparison);
+    setHistory(nextHistory);
+  }, []);
 
   useEffect(() => {
-    getStatus()
-      .then(setStatus)
-      .catch(() => setStatus(mockStatus));
-
-    getPredictionHistory(20)
-      .then(setHistory)
-      .catch(() => setHistory([]));
-
-    getModelComparison()
-      .then(setModelComparison)
-      .catch(() => setModelComparison(mockModelComparison));
-  }, []);
+    getCurrentUser()
+      .then(async (user) => {
+        setAuthUser(user);
+        if (user) {
+          await loadProtectedWorkspace();
+        } else {
+          resetProtectedWorkspace();
+        }
+      })
+      .catch(() => {
+        setAuthUser(null);
+        resetProtectedWorkspace();
+      })
+      .finally(() => setIsAuthLoading(false));
+  }, [loadProtectedWorkspace, resetProtectedWorkspace]);
 
   const latestUrlResult = urlResult ?? history[0] ?? null;
 
@@ -59,7 +99,9 @@ function usePredictionWorkspace() {
       const result = await predictUrl(url);
       setUrlResult(result);
       setActiveResult("url");
-      setHistory((current) => [result, ...current].slice(0, 20));
+      if (authUser) {
+        setHistory((current) => [result, ...current].slice(0, 20));
+      }
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Unable to analyze this URL.");
     } finally {
@@ -91,13 +133,57 @@ function usePredictionWorkspace() {
     }
   }
 
+  async function handleLogin(credentials: AuthCredentials) {
+    setAuthError("");
+    setIsAuthSubmitting(true);
+    try {
+      const session = await login(credentials);
+      setAuthUser(session.user);
+      await loadProtectedWorkspace();
+    } catch (apiError) {
+      setAuthError(apiError instanceof Error ? apiError.message : "Unable to sign in.");
+      throw apiError;
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleSignup(credentials: AuthCredentials) {
+    setAuthError("");
+    setIsAuthSubmitting(true);
+    try {
+      const session = await signup(credentials);
+      setAuthUser(session.user);
+      await loadProtectedWorkspace();
+    } catch (apiError) {
+      setAuthError(apiError instanceof Error ? apiError.message : "Unable to create account.");
+      throw apiError;
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleLogout() {
+    setAuthError("");
+    await logout();
+    setAuthUser(null);
+    resetProtectedWorkspace();
+  }
+
   return {
     activeResult,
+    authError,
+    authUser,
     csvResult,
     error,
     handleCsvSubmit,
+    handleLogin,
+    handleLogout,
+    handleSignup,
     handleUrlSubmit,
     history,
+    isAuthLoading,
+    isAuthSubmitting,
     isCheckingUrl,
     isUploadingCsv,
     latestUrlResult,

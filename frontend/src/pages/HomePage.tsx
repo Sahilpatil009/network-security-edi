@@ -7,8 +7,12 @@ import { FeatureGrid } from "../components/home/FeatureGrid";
 import { HeroPreview } from "../components/home/HeroPreview";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import type { AuthUser } from "../lib/types";
 
-function HomePage() {
+function HomePage({ user }: { user: AuthUser | null }) {
+  const primaryLink = user ? "/analyze" : "/auth";
+  const secondaryLink = user ? "/dashboard" : "/about";
+
   return (
     <main>
       <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#071114]">
@@ -53,13 +57,13 @@ function HomePage() {
             </div>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link to="/analyze">
-                  Start analysis
+                <Link to={primaryLink}>
+                  {user ? "Start analysis" : "Login to start"}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="secondary">
-                <Link to="/dashboard">View dashboard</Link>
+                <Link to={secondaryLink}>{user ? "View dashboard" : "View project"}</Link>
               </Button>
             </div>
           </motion.div>

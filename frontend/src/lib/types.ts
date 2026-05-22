@@ -58,6 +58,26 @@ interface CsvPrediction {
 
 interface PredictionHistoryResponse {
   items: UrlPrediction[];
+  requiresAuth?: boolean;
+}
+
+interface AuthUser {
+  createdAt: string;
+  email: string;
+  id: string;
+  name: string;
+}
+
+interface AuthSession {
+  expiresAt: string;
+  token: string;
+  user: AuthUser;
+}
+
+interface AuthCredentials {
+  email: string;
+  name?: string;
+  password: string;
 }
 
 interface ModelComparisonRow {
@@ -88,6 +108,9 @@ interface ModelComparisonReport {
 
 export type {
   AppStatus,
+  AuthCredentials,
+  AuthSession,
+  AuthUser,
   CsvPrediction,
   ModelComparisonReport,
   ModelComparisonRow,

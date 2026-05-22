@@ -1,4 +1,15 @@
-import type { AppStatus, CsvPrediction, ModelComparisonReport, PredictionHistoryResponse, UrlPrediction } from "./types";
+import type {
+  AppStatus,
+  AuthCredentials,
+  AuthSession,
+  AuthUser,
+  CsvPrediction,
+  ModelComparisonReport,
+  PredictionHistoryResponse,
+  UrlPrediction,
+} from "./types";
+
+const authTokenStorageKey = "network-security-auth-token";
 
 const mockStatus: AppStatus = {
   gemini: { meta: "gemini-3.5-flash", ready: true, status: "Configured" },
@@ -44,27 +55,88 @@ const mockPrediction: UrlPrediction = {
   url: "https://example.com/login",
 };
 
+function getStoredAuthToken() {
+  return window.localStorage.getItem(authTokenStorageKey);
+}
+
+function saveAuthToken(token: string) {
+  window.localStorage.setItem(authTokenStorageKey, token);
+}
+
+function clearAuthToken() {
+  window.localStorage.removeItem(authTokenStorageKey);
+}
+
+function authHeaders(): HeadersInit {
+  const token = getStoredAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function parseJson<T>(response: Response): Promise<T> {
-  const payload = (await response.json()) as T & { error?: string; message?: string };
+  const payload = (await response.json().catch(() => ({}))) as T & { detail?: string; error?: string; message?: string };
   if (!response.ok || payload.error) {
-    throw new Error(payload.message || payload.error || "Request failed.");
+    throw new Error(payload.message || payload.error || payload.detail || "Request failed.");
   }
   return payload;
 }
 
+async function requestAuth(endpoint: "/api/auth/login" | "/api/auth/signup", payload: AuthCredentials): Promise<AuthSession> {
+  const response = await fetch(endpoint, {
+    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const session = await parseJson<AuthSession>(response);
+  saveAuthToken(session.token);
+  return session;
+}
+
+async function login(credentials: AuthCredentials): Promise<AuthSession> {
+  return requestAuth("/api/auth/login", credentials);
+}
+
+async function signup(credentials: AuthCredentials): Promise<AuthSession> {
+  return requestAuth("/api/auth/signup", credentials);
+}
+
+async function getCurrentUser(): Promise<AuthUser | null> {
+  const token = getStoredAuthToken();
+  if (!token) {
+    return null;
+  }
+  try {
+    const response = await fetch("/api/auth/me", { headers: authHeaders() });
+    const payload = await parseJson<{ user: AuthUser }>(response);
+    return payload.user;
+  } catch (error) {
+    clearAuthToken();
+    throw error;
+  }
+}
+
+async function logout(): Promise<void> {
+  await fetch("/api/auth/logout", {
+    headers: authHeaders(),
+    method: "POST",
+  }).catch(() => undefined);
+  clearAuthToken();
+}
+
 async function getStatus(): Promise<AppStatus> {
-  const response = await fetch("/api/status");
+  const response = await fetch("/api/status", { headers: authHeaders() });
   return parseJson<AppStatus>(response);
 }
 
 async function getPredictionHistory(limit = 10): Promise<UrlPrediction[]> {
-  const response = await fetch(`/api/prediction-history?limit=${limit}`);
+  const response = await fetch(`/api/prediction-history?limit=${limit}`, {
+    headers: authHeaders(),
+  });
   const payload = await parseJson<PredictionHistoryResponse>(response);
   return payload.items;
 }
 
 async function getModelComparison(): Promise<ModelComparisonReport> {
-  const response = await fetch("/api/model-comparison");
+  const response = await fetch("/api/model-comparison", { headers: authHeaders() });
   return parseJson<ModelComparisonReport>(response);
 }
 
@@ -73,6 +145,7 @@ async function predictUrl(url: string): Promise<UrlPrediction> {
   body.append("url", url);
   const response = await fetch("/api/predict-url", {
     body,
+    headers: authHeaders(),
     method: "POST",
   });
   return parseJson<UrlPrediction>(response);
@@ -83,9 +156,25 @@ async function predictCsv(file: File): Promise<CsvPrediction> {
   body.append("file", file);
   const response = await fetch("/api/predict-csv", {
     body,
+    headers: authHeaders(),
     method: "POST",
   });
   return parseJson<CsvPrediction>(response);
 }
 
-export { getModelComparison, getPredictionHistory, getStatus, mockModelComparison, mockPrediction, mockStatus, predictCsv, predictUrl };
+export {
+  clearAuthToken,
+  getCurrentUser,
+  getModelComparison,
+  getPredictionHistory,
+  getStatus,
+  getStoredAuthToken,
+  login,
+  logout,
+  mockModelComparison,
+  mockPrediction,
+  mockStatus,
+  predictCsv,
+  predictUrl,
+  signup,
+};
