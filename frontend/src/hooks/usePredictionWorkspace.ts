@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
-import { getPredictionHistory, getStatus, mockStatus, predictCsv, predictUrl } from "../lib/api";
+import { getModelComparison, getPredictionHistory, getStatus, mockModelComparison, mockStatus, predictCsv, predictUrl } from "../lib/api";
 import { signalColors } from "../lib/ui-data";
-import type { AppStatus, CsvPrediction, UrlPrediction } from "../lib/types";
+import type { AppStatus, CsvPrediction, ModelComparisonReport, UrlPrediction } from "../lib/types";
 
 type ActiveResult = "empty" | "url" | "csv";
 
 function usePredictionWorkspace() {
   const [status, setStatus] = useState<AppStatus>(mockStatus);
+  const [modelComparison, setModelComparison] = useState<ModelComparisonReport>(mockModelComparison);
   const [url, setUrl] = useState("https://example.com/login");
   const [urlResult, setUrlResult] = useState<UrlPrediction | null>(null);
   const [csvResult, setCsvResult] = useState<CsvPrediction | null>(null);
@@ -26,6 +27,10 @@ function usePredictionWorkspace() {
     getPredictionHistory(20)
       .then(setHistory)
       .catch(() => setHistory([]));
+
+    getModelComparison()
+      .then(setModelComparison)
+      .catch(() => setModelComparison(mockModelComparison));
   }, []);
 
   const latestUrlResult = urlResult ?? history[0] ?? null;
@@ -96,6 +101,7 @@ function usePredictionWorkspace() {
     isCheckingUrl,
     isUploadingCsv,
     latestUrlResult,
+    modelComparison,
     setUrl,
     signalData,
     status,

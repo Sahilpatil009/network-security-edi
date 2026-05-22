@@ -7,6 +7,7 @@ interface StatusItem {
 interface AppStatus {
   gemini: StatusItem;
   model: StatusItem;
+  modelComparison: StatusItem;
   mongo: StatusItem;
   output: StatusItem;
   preprocessor: StatusItem;
@@ -59,4 +60,38 @@ interface PredictionHistoryResponse {
   items: UrlPrediction[];
 }
 
-export type { AppStatus, CsvPrediction, PredictionHistoryResponse, UrlFeature, UrlPrediction };
+interface ModelComparisonRow {
+  bestParams: Record<string, string | number | boolean | null>;
+  error: string;
+  isBest: boolean;
+  modelName: string;
+  status: "trained" | "failed" | "unavailable";
+  testAccuracy: number;
+  testF1: number;
+  testPrecision: number;
+  testRecall: number;
+  trainAccuracy: number;
+  trainF1: number;
+  trainPrecision: number;
+  trainRecall: number;
+}
+
+interface ModelComparisonReport {
+  bestModelName: string;
+  bestModelScore: number;
+  generatedAt: string;
+  message?: string;
+  models: ModelComparisonRow[];
+  ready: boolean;
+  reportMeta?: string;
+}
+
+export type {
+  AppStatus,
+  CsvPrediction,
+  ModelComparisonReport,
+  ModelComparisonRow,
+  PredictionHistoryResponse,
+  UrlFeature,
+  UrlPrediction,
+};
