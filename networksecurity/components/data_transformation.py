@@ -70,7 +70,7 @@ class DataTransformation:
             target_feature_train_df=train_df[TARGET_COLUMN]
             target_feature_train_df=target_feature_train_df.replace(-1,0)
 
-             #testing dataframe
+            #testing dataframe
             input_feature_test_df = test_df.drop(columns=[TARGET_COLUMN])
             target_feature_test_df = test_df[TARGET_COLUMN]
             target_feature_test_df = target_feature_test_df.replace(-1, 0)
@@ -88,7 +88,7 @@ class DataTransformation:
             save_object( self.data_transformation_config.transformed_object_file_path, preprocessor_object,)
 
             save_object( "final_model/preprocessor.pkl", preprocessor_object,)
-  
+
             data_transformation_artifact=DataTransformationArtifact(
                 transformed_object_file_path=self.data_transformation_config.transformed_object_file_path,
                 transformed_train_file_path=self.data_transformation_config.transformed_train_file_path,

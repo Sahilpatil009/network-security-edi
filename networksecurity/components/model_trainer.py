@@ -25,7 +25,11 @@ from sklearn.ensemble import (
 )
 import mlflow
 import dagshub
-dagshub.init(repo_owner='Sanskar-cpu-sudo', repo_name='networksecurity', mlflow=True)
+
+DAGSHUB_REPO_OWNER = os.getenv("DAGSHUB_REPO_OWNER", "Sahilpatil009")
+DAGSHUB_REPO_NAME = os.getenv("DAGSHUB_REPO_NAME", "network-security-edi")
+
+dagshub.init(repo_owner=DAGSHUB_REPO_OWNER, repo_name=DAGSHUB_REPO_NAME, mlflow=True)
 
 class ModelTrainer:
     def __init__(self,model_trainer_config:ModelTrainerConfig,data_transformation_artifact:DataTransformationArtifact):
