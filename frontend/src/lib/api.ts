@@ -10,6 +10,12 @@ import type {
 } from "./types";
 
 const authTokenStorageKey = "network-security-auth-token";
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+function apiUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${apiBaseUrl}${normalizedPath}`;
+}
 
 const mockStatus: AppStatus = {
   gemini: { meta: "gemini-3.5-flash", ready: true, status: "Configured" },
@@ -81,7 +87,7 @@ async function parseJson<T>(response: Response): Promise<T> {
 }
 
 async function requestAuth(endpoint: "/api/auth/login" | "/api/auth/signup", payload: AuthCredentials): Promise<AuthSession> {
-  const response = await fetch(endpoint, {
+  const response = await fetch(apiUrl(endpoint), {
     body: JSON.stringify(payload),
     headers: { "Content-Type": "application/json" },
     method: "POST",
@@ -105,7 +111,7 @@ async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
   try {
-    const response = await fetch("/api/auth/me", { headers: authHeaders() });
+    const response = await fetch(apiUrl("/api/auth/me"), { headers: authHeaders() });
     const payload = await parseJson<{ user: AuthUser }>(response);
     return payload.user;
   } catch (error) {
@@ -115,7 +121,7 @@ async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 async function logout(): Promise<void> {
-  await fetch("/api/auth/logout", {
+  await fetch(apiUrl("/api/auth/logout"), {
     headers: authHeaders(),
     method: "POST",
   }).catch(() => undefined);
@@ -123,12 +129,12 @@ async function logout(): Promise<void> {
 }
 
 async function getStatus(): Promise<AppStatus> {
-  const response = await fetch("/api/status", { headers: authHeaders() });
+  const response = await fetch(apiUrl("/api/status"), { headers: authHeaders() });
   return parseJson<AppStatus>(response);
 }
 
 async function getPredictionHistory(limit = 10): Promise<UrlPrediction[]> {
-  const response = await fetch(`/api/prediction-history?limit=${limit}`, {
+  const response = await fetch(apiUrl(`/api/prediction-history?limit=${limit}`), {
     headers: authHeaders(),
   });
   const payload = await parseJson<PredictionHistoryResponse>(response);
@@ -136,14 +142,14 @@ async function getPredictionHistory(limit = 10): Promise<UrlPrediction[]> {
 }
 
 async function getModelComparison(): Promise<ModelComparisonReport> {
-  const response = await fetch("/api/model-comparison", { headers: authHeaders() });
+  const response = await fetch(apiUrl("/api/model-comparison"), { headers: authHeaders() });
   return parseJson<ModelComparisonReport>(response);
 }
 
 async function predictUrl(url: string): Promise<UrlPrediction> {
   const body = new FormData();
   body.append("url", url);
-  const response = await fetch("/api/predict-url", {
+  const response = await fetch(apiUrl("/api/predict-url"), {
     body,
     headers: authHeaders(),
     method: "POST",
@@ -154,7 +160,7 @@ async function predictUrl(url: string): Promise<UrlPrediction> {
 async function predictCsv(file: File): Promise<CsvPrediction> {
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch("/api/predict-csv", {
+  const response = await fetch(apiUrl("/api/predict-csv"), {
     body,
     headers: authHeaders(),
     method: "POST",
@@ -164,6 +170,7 @@ async function predictCsv(file: File): Promise<CsvPrediction> {
 
 export {
   clearAuthToken,
+  apiUrl,
   getCurrentUser,
   getModelComparison,
   getPredictionHistory,

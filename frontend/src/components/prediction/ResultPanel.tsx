@@ -14,6 +14,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Progress } from "../ui/progress";
+import { apiUrl } from "../../lib/api";
 import { buildCsvPreviewColumns } from "../../lib/format";
 import type { ActiveResult } from "../../hooks/usePredictionWorkspace";
 import type { CsvPrediction, UrlPrediction } from "../../lib/types";
@@ -105,7 +106,7 @@ function CsvResult({ csvChartData, csvLegitimatePercent, csvPhishingPercent, csv
           <p className="mt-1 text-sm text-slate-500">{csvResult.outputMeta}</p>
         </div>
         <Button asChild variant="outline">
-          <a href="/download-output">
+          <a href={apiUrl("/download-output")}>
             Download scored CSV
             <Download className="h-4 w-4" />
           </a>

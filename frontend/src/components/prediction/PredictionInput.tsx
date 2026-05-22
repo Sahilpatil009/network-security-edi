@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { apiUrl } from "../../lib/api";
 
 interface PredictionInputProps {
   error: string;
@@ -76,7 +77,7 @@ function PredictionInput({
                   <FileSpreadsheet className="h-4 w-4" />
                 </Button>
                 <Button asChild variant="outline">
-                  <a href="/sample-data">Download sample</a>
+                  <a href={apiUrl("/sample-data")}>Download sample</a>
                 </Button>
               </div>
             </form>
