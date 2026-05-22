@@ -1,13 +1,23 @@
-import type { AppStatus, CsvPrediction, PredictionHistoryResponse, UrlPrediction } from "./types";
+import type { AppStatus, CsvPrediction, ModelComparisonReport, PredictionHistoryResponse, UrlPrediction } from "./types";
 
 const mockStatus: AppStatus = {
   gemini: { meta: "gemini-3.5-flash", ready: true, status: "Configured" },
   model: { meta: "1,655 KB | local artifact", ready: true, status: "Ready" },
+  modelComparison: { meta: "Run training to generate report", ready: false, status: "Not generated" },
   mongo: { meta: "Local development connection", ready: true, status: "Configured" },
   output: { meta: "No predictions yet", ready: false, status: "Waiting" },
   preprocessor: { meta: "2,333 KB | local artifact", ready: true, status: "Ready" },
   repo: { name: "Sahilpatil009/network-security-edi", url: "https://dagshub.com/Sahilpatil009/network-security-edi" },
   sampleData: { meta: "Sample phishing feature CSV", ready: true, status: "Available" },
+};
+
+const mockModelComparison: ModelComparisonReport = {
+  bestModelName: "",
+  bestModelScore: 0,
+  generatedAt: "",
+  message: "Run model training to generate a model comparison report.",
+  models: [],
+  ready: false,
 };
 
 const mockPrediction: UrlPrediction = {
@@ -53,6 +63,11 @@ async function getPredictionHistory(limit = 10): Promise<UrlPrediction[]> {
   return payload.items;
 }
 
+async function getModelComparison(): Promise<ModelComparisonReport> {
+  const response = await fetch("/api/model-comparison");
+  return parseJson<ModelComparisonReport>(response);
+}
+
 async function predictUrl(url: string): Promise<UrlPrediction> {
   const body = new FormData();
   body.append("url", url);
@@ -73,4 +88,4 @@ async function predictCsv(file: File): Promise<CsvPrediction> {
   return parseJson<CsvPrediction>(response);
 }
 
-export { getPredictionHistory, getStatus, mockPrediction, mockStatus, predictCsv, predictUrl };
+export { getModelComparison, getPredictionHistory, getStatus, mockModelComparison, mockPrediction, mockStatus, predictCsv, predictUrl };

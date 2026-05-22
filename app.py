@@ -51,6 +51,8 @@ BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = BASE_DIR / "templates"
 MODEL_PATH = BASE_DIR / "final_model" / "model.pkl"
 PREPROCESSOR_PATH = BASE_DIR / "final_model" / "preprocessor.pkl"
+MODEL_COMPARISON_JSON_PATH = BASE_DIR / "final_model" / "model_comparison.json"
+MODEL_COMPARISON_CSV_PATH = BASE_DIR / "final_model" / "model_comparison.csv"
 PREDICTION_OUTPUT_PATH = BASE_DIR / "prediction_output" / "output.csv"
 SAMPLE_DATA_PATH = BASE_DIR / "Network_Data" / "phisingData.csv"
 DAGSHUB_REPO_OWNER = os.getenv("DAGSHUB_REPO_OWNER", "Sahilpatil009")
@@ -295,11 +297,34 @@ def get_url_prediction_history(limit: int = 10) -> list:
     return [serialize_url_prediction_history(document) for document in documents]
 
 
+def build_model_comparison_payload() -> dict:
+    if not MODEL_COMPARISON_JSON_PATH.exists():
+        return {
+            "ready": False,
+            "generatedAt": "",
+            "bestModelName": "",
+            "bestModelScore": 0,
+            "models": [],
+            "message": "Run model training to generate a model comparison report.",
+        }
+
+    with open(MODEL_COMPARISON_JSON_PATH, "r", encoding="utf-8") as file_obj:
+        payload = json.load(file_obj)
+
+    best_model = next((model for model in payload.get("models", []) if model.get("isBest")), None)
+    payload["ready"] = True
+    payload["bestModelName"] = payload.get("bestModelName") or (best_model or {}).get("modelName", "")
+    payload["bestModelScore"] = payload.get("bestModelScore") or (best_model or {}).get("testF1", 0)
+    payload["reportMeta"] = file_meta(MODEL_COMPARISON_CSV_PATH)
+    return payload
+
+
 def build_status_payload() -> dict:
     model_ready = MODEL_PATH.exists() and PREPROCESSOR_PATH.exists()
     mongo_ready = bool(mongo_db_url)
     sample_ready = SAMPLE_DATA_PATH.exists()
     output_ready = PREDICTION_OUTPUT_PATH.exists()
+    model_comparison_ready = MODEL_COMPARISON_JSON_PATH.exists()
     return {
         "model": {
             "status": "Ready" if model_ready else "Missing",
@@ -325,6 +350,11 @@ def build_status_payload() -> dict:
             "status": "Available" if output_ready else "No predictions yet",
             "ready": output_ready,
             "meta": file_meta(PREDICTION_OUTPUT_PATH),
+        },
+        "modelComparison": {
+            "status": "Available" if model_comparison_ready else "Not generated",
+            "ready": model_comparison_ready,
+            "meta": file_meta(MODEL_COMPARISON_JSON_PATH),
         },
         "gemini": {
             "status": "Configured" if GEMINI_API_KEY else "Missing",
@@ -380,6 +410,20 @@ async def api_prediction_history(limit: int = 10):
             "error": str(error),
             "message": "Could not load URL prediction history from MongoDB.",
             "items": [],
+        }
+
+
+@app.get("/api/model-comparison")
+async def api_model_comparison():
+    try:
+        return build_model_comparison_payload()
+    except Exception as e:
+        error = NetworkSecurityException(e, sys)
+        return {
+            "ready": False,
+            "error": str(error),
+            "message": "Could not load the model comparison report.",
+            "models": [],
         }
 
 

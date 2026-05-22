@@ -65,5 +65,15 @@ class ModelTrainerConfig:
             self.model_trainer_dir, training_pipeline.MODEL_TRAINER_TRAINED_MODEL_DIR, 
             training_pipeline.MODEL_FILE_NAME
         )
+        self.model_comparison_report_file_path: str = os.path.join(
+            self.model_trainer_dir,
+            training_pipeline.MODEL_TRAINER_REPORT_DIR,
+            training_pipeline.MODEL_TRAINER_MODEL_COMPARISON_FILE_NAME,
+        )
+        self.model_comparison_json_file_path: str = os.path.join(
+            self.model_trainer_dir,
+            training_pipeline.MODEL_TRAINER_REPORT_DIR,
+            training_pipeline.MODEL_TRAINER_MODEL_COMPARISON_JSON_FILE_NAME,
+        )
         self.expected_accuracy: float = training_pipeline.MODEL_TRAINER_EXPECTED_SCORE
         self.overfitting_underfitting_threshold = training_pipeline.MODEL_TRAINER_OVER_FIITING_UNDER_FITTING_THRESHOLD

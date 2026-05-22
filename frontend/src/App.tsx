@@ -9,6 +9,7 @@ const AnalyzePage = lazy(() => import("./pages/AnalyzePage").then((module) => ({
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const HistoryPage = lazy(() => import("./pages/HistoryPage").then((module) => ({ default: module.HistoryPage })));
 const HomePage = lazy(() => import("./pages/HomePage").then((module) => ({ default: module.HomePage })));
+const ModelsPage = lazy(() => import("./pages/ModelsPage").then((module) => ({ default: module.ModelsPage })));
 
 function App() {
   const workspace = usePredictionWorkspace();
@@ -48,6 +49,7 @@ function App() {
               }
             />
             <Route path="history" element={<HistoryPage history={workspace.history} />} />
+            <Route path="models" element={<ModelsPage report={workspace.modelComparison} />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="*" element={<Navigate replace to="/" />} />
           </Route>

@@ -32,3 +32,6 @@ class ModelTrainerArtifact:
     trained_model_file_path: str
     train_metric_artifact: ClassificationMetricArtifact
     test_metric_artifact: ClassificationMetricArtifact
+    model_comparison_report_file_path: Optional[str] = None
+    model_comparison_json_file_path: Optional[str] = None
+    best_model_name: Optional[str] = None
