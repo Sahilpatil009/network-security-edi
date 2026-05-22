@@ -1,0 +1,11 @@
+[2026-05-22 11:16:05,775] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/user "HTTP/1.1 200 OK"
+[2026-05-22 11:16:05,790] 107dagshub - INFO - Accessing as Sahilpatil009
+[2026-05-22 11:16:06,775] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/repos/Sanskar-cpu-sudo/networksecurity "HTTP/1.1 200 OK"
+[2026-05-22 11:16:07,860] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/user "HTTP/1.1 200 OK"
+[2026-05-22 11:16:07,866] 107dagshub - INFO - Initialized MLflow to track repo "Sanskar-cpu-sudo/networksecurity"
+[2026-05-22 11:16:07,868] 107dagshub - INFO - Repository Sanskar-cpu-sudo/networksecurity initialized!
+[2026-05-22 11:16:07,982] 119fastapi - ERROR - Form data requires "python-multipart" to be installed. 
+You can install "python-multipart" with: 
+
+pip install python-multipart
+

@@ -20,8 +20,7 @@ from networksecurity.logging.logger import logging
 from networksecurity.utils.main_utils.utils import save_numpy_array_data,save_object
 
 class DataTransformation:
-    def __init__(self,data_validation_artifact:DataValidationArtifact,
-                 data_transformation_config:DataTransformationConfig):
+    def __init__(self,data_validation_artifact:DataValidationArtifact, data_transformation_config:DataTransformationConfig):
         try:
             self.data_validation_artifact:DataValidationArtifact=data_validation_artifact
             self.data_transformation_config:DataTransformationConfig=data_transformation_config
@@ -41,21 +40,21 @@ class DataTransformation:
         and returns a Pipeline object with the KNNImputer object as the first step.
 
         Args:
-          cls: DataTransformation
+        cls: DataTransformation
 
         Returns:
-          A Pipeline object
+        A Pipeline object
         """
         logging.info(
             "Entered get_data_trnasformer_object method of Trnasformation class"
         )
         try:
-           imputer:KNNImputer=KNNImputer(**DATA_TRANSFORMATION_IMPUTER_PARAMS)
-           logging.info(
+            imputer:KNNImputer=KNNImputer(**DATA_TRANSFORMATION_IMPUTER_PARAMS)
+            logging.info(
                 f"Initialise KNNImputer with {DATA_TRANSFORMATION_IMPUTER_PARAMS}"
             )
-           processor:Pipeline=Pipeline([("imputer",imputer)])
-           return processor
+            processor:Pipeline=Pipeline([("imputer",imputer)])
+            return processor
         except Exception as e:
             raise NetworkSecurityException(e,sys)
         
