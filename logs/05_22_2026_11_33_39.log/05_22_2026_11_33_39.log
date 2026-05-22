@@ -1,0 +1,7 @@
+[2026-05-22 11:33:47,447] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/user "HTTP/1.1 200 OK"
+[2026-05-22 11:33:47,492] 107dagshub - INFO - Accessing as Sahilpatil009
+[2026-05-22 11:33:48,445] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/repos/Sahilpatil009/network-security-edi "HTTP/1.1 200 OK"
+[2026-05-22 11:33:49,535] 1025httpx - INFO - HTTP Request: GET https://dagshub.com/api/v1/user "HTTP/1.1 200 OK"
+[2026-05-22 11:33:49,542] 107dagshub - INFO - Initialized MLflow to track repo "Sahilpatil009/network-security-edi"
+[2026-05-22 11:33:49,544] 107dagshub - INFO - Repository Sahilpatil009/network-security-edi initialized!
+[2026-05-22 11:34:13,247] 34root - INFO - Start Data Ingestion
