@@ -1,0 +1,80 @@
+{
+  "ready": true,
+  "generatedAt": "2026-05-22T11:12:30.014105Z",
+  "bestModelName": "Random Forest",
+  "bestModelScore": 0.975233455136013,
+  "models": [
+    {
+      "modelName": "Random Forest",
+      "status": "trained",
+      "trainF1": 0.9908888438955255,
+      "testF1": 0.975233455136013,
+      "trainPrecision": 0.9884871743082205,
+      "testPrecision": 0.9740470397404704,
+      "trainRecall": 0.9933022122995738,
+      "testRecall": 0.9764227642276423,
+      "trainAccuracy": 0.9898236092265943,
+      "testAccuracy": 0.9724106739032112,
+      "bestParams": {
+        "max_depth": null,
+        "n_estimators": 50
+      },
+      "isBest": true,
+      "error": ""
+    },
+    {
+      "modelName": "Logistic Regression",
+      "status": "trained",
+      "trainF1": 0.9375814046688709,
+      "testF1": 0.9391374445787989,
+      "trainPrecision": 0.9258013454689354,
+      "testPrecision": 0.9312549960031974,
+      "trainRecall": 0.9496651106149787,
+      "testRecall": 0.9471544715447154,
+      "trainAccuracy": 0.9295567616463138,
+      "testAccuracy": 0.9317051108095884,
+      "bestParams": {
+        "C": 0.1
+      },
+      "isBest": false,
+      "error": ""
+    },
+    {
+      "modelName": "Decision Tree",
+      "status": "trained",
+      "trainF1": 0.9908499389995933,
+      "testF1": 0.9691056910569106,
+      "trainPrecision": 0.9926665308616827,
+      "testPrecision": 0.9691056910569106,
+      "trainRecall": 0.9890399837629389,
+      "testRecall": 0.9691056910569106,
+      "trainAccuracy": 0.9898236092265943,
+      "testAccuracy": 0.9656264133876075,
+      "bestParams": {
+        "criterion": "entropy",
+        "max_depth": null
+      },
+      "isBest": false,
+      "error": ""
+    },
+    {
+      "modelName": "XGBoost",
+      "status": "trained",
+      "trainF1": 0.9700996677740864,
+      "testF1": 0.9582488852857722,
+      "trainPrecision": 0.962445065920895,
+      "testPrecision": 0.9555375909458367,
+      "trainRecall": 0.9778770042622286,
+      "testRecall": 0.9609756097560975,
+      "trainAccuracy": 0.9664179104477612,
+      "testAccuracy": 0.9534147444595206,
+      "bestParams": {
+        "estimator__learning_rate": 0.1,
+        "estimator__max_depth": 5,
+        "estimator__n_estimators": 100
+      },
+      "isBest": false,
+      "error": ""
+    }
+  ]
+}
