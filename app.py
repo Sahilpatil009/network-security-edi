@@ -1,7 +1,7 @@
 import sys
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -29,7 +29,15 @@ from networksecurity.utils.ml_utils.model.estimator import NetworkModel
 from networksecurity.utils.url_feature_extractor import extract_url_features
 
 
-client = pymongo.MongoClient(mongo_db_url, tlsCAFile=ca)
+def create_mongo_client(uri: str):
+    uri_lower = (uri or "").lower()
+    uses_tls = uri_lower.startswith("mongodb+srv://") or "tls=true" in uri_lower or "ssl=true" in uri_lower
+    if uses_tls:
+        return pymongo.MongoClient(uri, tlsCAFile=ca)
+    return pymongo.MongoClient(uri)
+
+
+client = create_mongo_client(mongo_db_url)
 
 from networksecurity.constants.training_pipeline import DATA_INGESTION_COLLECTION_NAME
 from networksecurity.constants.training_pipeline import DATA_INGESTION_DATABASE_NAME
@@ -49,6 +57,8 @@ DAGSHUB_REPO_OWNER = os.getenv("DAGSHUB_REPO_OWNER", "Sahilpatil009")
 DAGSHUB_REPO_NAME = os.getenv("DAGSHUB_REPO_NAME", "network-security-edi")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+URL_PREDICTION_COLLECTION_NAME = os.getenv("URL_PREDICTION_COLLECTION_NAME", "url_prediction_history")
+url_prediction_collection = database[URL_PREDICTION_COLLECTION_NAME]
 origins = ["*"]
 
 app.add_middleware(
@@ -222,6 +232,69 @@ def build_url_prediction(url: str) -> dict:
     }
 
 
+def save_url_prediction(result: dict) -> dict:
+    saved_at = datetime.now(timezone.utc)
+    document = {
+        "url": result["url"],
+        "finalUrl": result["finalUrl"],
+        "hostname": result["hostname"],
+        "dnsStatus": result["dnsStatus"],
+        "htmlStatus": result["htmlStatus"],
+        "prediction": result["prediction"],
+        "label": result["label"],
+        "statusClass": result["statusClass"],
+        "confidence": result["confidence"],
+        "summary": result["summary"],
+        "signals": result["signals"],
+        "features": result["features"],
+        "suspiciousFeatures": [
+            feature["name"]
+            for feature in result["features"]
+            if feature["signal"] == "Suspicious"
+        ],
+        "createdAt": saved_at,
+    }
+    inserted = url_prediction_collection.insert_one(document)
+    result["historyId"] = str(inserted.inserted_id)
+    result["savedAt"] = saved_at.isoformat()
+    return result
+
+
+def serialize_url_prediction_history(document: dict) -> dict:
+    created_at = document.get("createdAt")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+
+    return {
+        "historyId": str(document.get("_id", "")),
+        "url": document.get("url", ""),
+        "finalUrl": document.get("finalUrl", ""),
+        "hostname": document.get("hostname", ""),
+        "dnsStatus": document.get("dnsStatus", ""),
+        "htmlStatus": document.get("htmlStatus", ""),
+        "prediction": int(document.get("prediction", 0)),
+        "label": document.get("label", "Phishing"),
+        "statusClass": document.get("statusClass", "danger"),
+        "confidence": int(document.get("confidence", 0)),
+        "summary": document.get("summary", ""),
+        "signals": document.get("signals", {"suspicious": 0, "neutral": 0, "normal": 0}),
+        "features": document.get("features", []),
+        "suspiciousFeatures": document.get("suspiciousFeatures", []),
+        "createdAt": created_at or "",
+    }
+
+
+def get_url_prediction_history(limit: int = 10) -> list:
+    safe_limit = max(1, min(limit, 50))
+    documents = (
+        url_prediction_collection
+        .find()
+        .sort("createdAt", pymongo.DESCENDING)
+        .limit(safe_limit)
+    )
+    return [serialize_url_prediction_history(document) for document in documents]
+
+
 def build_status_payload() -> dict:
     model_ready = MODEL_PATH.exists() and PREPROCESSOR_PATH.exists()
     mongo_ready = bool(mongo_db_url)
@@ -295,6 +368,20 @@ async def index():
 @app.get("/api/status")
 async def api_status():
     return build_status_payload()
+
+
+@app.get("/api/prediction-history")
+async def api_prediction_history(limit: int = 10):
+    try:
+        return {"items": get_url_prediction_history(limit)}
+    except Exception as e:
+        error = NetworkSecurityException(e, sys)
+        return {
+            "error": str(error),
+            "message": "Could not load URL prediction history from MongoDB.",
+            "items": [],
+        }
+
 
 @app.get("/train")
 async def train_route():
@@ -378,6 +465,7 @@ async def predict_route(file: UploadFile = File(...)):
 async def predict_url_route(url: str = Form(...)):
     try:
         result = build_url_prediction(url)
+        result = save_url_prediction(result)
         features = {feature["name"]: feature["value"] for feature in result["features"]}
 
         return render_template(
@@ -411,7 +499,8 @@ async def predict_url_route(url: str = Form(...)):
 @app.post("/api/predict-url")
 async def api_predict_url(url: str = Form(...)):
     try:
-        return build_url_prediction(url)
+        result = build_url_prediction(url)
+        return save_url_prediction(result)
     except Exception as e:
         error = NetworkSecurityException(e, sys)
         return {

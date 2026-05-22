@@ -40,7 +40,7 @@ import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { Progress } from "./components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { getStatus, mockStatus, predictCsv, predictUrl } from "./lib/api";
+import { getPredictionHistory, getStatus, mockStatus, predictCsv, predictUrl } from "./lib/api";
 import type { AppStatus, CsvPrediction, UrlPrediction } from "./lib/types";
 import heroImg from "./assets/hero.png";
 
@@ -52,7 +52,7 @@ const featureCards = [
   },
   {
     title: "ML Risk Classification",
-    description: "Uses your trained phishing model to classify links as legitimate or suspicious in a portfolio-ready flow.",
+    description: "Uses your trained phishing model to classify links as legitimate or suspicious in a clear, reviewable flow.",
     icon: BrainCircuit,
   },
   {
@@ -92,13 +92,19 @@ function App() {
     getStatus()
       .then(setStatus)
       .catch(() => setStatus(mockStatus));
+
+    getPredictionHistory()
+      .then(setHistory)
+      .catch(() => setHistory([]));
   }, []);
 
-  const signalData = urlResult
+  const latestUrlResult = urlResult ?? history[0] ?? null;
+
+  const signalData = latestUrlResult
     ? [
-        { name: "Suspicious", value: urlResult.signals.suspicious, color: signalColors.suspicious },
-        { name: "Neutral", value: urlResult.signals.neutral, color: signalColors.neutral },
-        { name: "Normal", value: urlResult.signals.normal, color: signalColors.normal },
+        { name: "Suspicious", value: latestUrlResult.signals.suspicious, color: signalColors.suspicious },
+        { name: "Neutral", value: latestUrlResult.signals.neutral, color: signalColors.neutral },
+        { name: "Normal", value: latestUrlResult.signals.normal, color: signalColors.normal },
       ]
     : [
         { name: "Suspicious", value: 8, color: signalColors.suspicious },
@@ -114,7 +120,7 @@ function App() {
       const result = await predictUrl(url);
       setUrlResult(result);
       setActiveResult("url");
-      setHistory((current) => [result, ...current.filter((item) => item.url !== result.url)].slice(0, 5));
+      setHistory((current) => [result, ...current].slice(0, 10));
     } catch (apiError) {
       setError(apiError instanceof Error ? apiError.message : "Unable to analyze this URL.");
     } finally {
@@ -160,7 +166,7 @@ function App() {
         url={url}
         urlResult={urlResult}
       />
-      <DashboardSection history={history} signalData={signalData} status={status} urlResult={urlResult} />
+      <DashboardSection history={history} signalData={signalData} status={status} urlResult={latestUrlResult} />
       <FeatureSection />
       <Footer />
     </main>
@@ -169,14 +175,36 @@ function App() {
 
 function LandingSection() {
   return (
-    <section className="relative isolate overflow-hidden border-b border-white/10">
-      <div className="absolute inset-0 bg-[linear-gradient(115deg,#0f172a_0%,#0f766e_52%,#1f2937_100%)]" />
+    <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#071114]" id="top">
+      <div className="absolute inset-0 bg-[linear-gradient(120deg,#071114_0%,#0f2a2e_45%,#111827_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:72px_72px] opacity-25" />
       <img
         alt="Layered detection system visual"
-        className="absolute right-4 top-16 hidden w-72 opacity-40 lg:block"
+        className="absolute right-0 top-24 hidden w-[30rem] opacity-20 mix-blend-screen lg:block"
         src={heroImg}
       />
-      <div className="relative mx-auto grid min-h-[620px] max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:px-8">
+
+      <nav className="relative mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8" aria-label="Primary navigation">
+        <a className="flex items-center gap-3 text-sm font-semibold text-white" href="#top">
+          <span className="grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-white/10">
+            <ShieldCheck className="h-5 w-5 text-teal-300" />
+          </span>
+          Network Security
+        </a>
+        <div className="hidden items-center gap-6 text-sm text-slate-300 md:flex">
+          <a className="transition hover:text-white" href="#analyze">
+            Analyze
+          </a>
+          <a className="transition hover:text-white" href="#dashboard">
+            Dashboard
+          </a>
+          <a className="transition hover:text-white" href="#features">
+            Features
+          </a>
+        </div>
+      </nav>
+
+      <div className="relative mx-auto grid min-h-[560px] max-w-7xl items-center gap-10 px-4 pb-16 pt-8 sm:px-6 lg:grid-cols-[0.95fr_0.9fr] lg:px-8">
         <motion.div
           animate={{ opacity: 1, y: 0 }}
           className="max-w-3xl"
@@ -187,12 +215,26 @@ function LandingSection() {
             <ShieldCheck className="h-3.5 w-3.5" />
             ML phishing intelligence
           </Badge>
-          <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-tight tracking-tight text-white sm:text-6xl lg:text-7xl">
+          <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-tight text-white sm:text-6xl lg:text-7xl">
             Network Security Console
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200">
-            A polished product interface for your phishing detection model: analyze a single URL, upload batch CSV data, and explain predictions with Gemini.
+            A premium workspace for phishing detection: check a single URL, score batch CSV files, and turn model output into clear security decisions.
           </p>
+          <div className="mt-7 flex flex-wrap gap-2.5 text-sm text-slate-200">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2">
+              <Radar className="h-4 w-4 text-teal-300" />
+              30 URL signals
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2">
+              <FileSpreadsheet className="h-4 w-4 text-sky-300" />
+              Batch scoring
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2">
+              <Sparkles className="h-4 w-4 text-amber-300" />
+              Gemini summary
+            </span>
+          </div>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg">
               <a href="#analyze">
@@ -208,7 +250,7 @@ function LandingSection() {
 
         <motion.div
           animate={{ opacity: 1, scale: 1 }}
-          className="rounded-lg border border-white/15 bg-slate-900/75 p-4 shadow-2xl shadow-slate-950/60 backdrop-blur"
+          className="hidden rounded-lg border border-white/15 bg-[#081316]/90 p-4 shadow-2xl shadow-slate-950/60 backdrop-blur lg:block"
           initial={{ opacity: 0, scale: 0.96 }}
           transition={{ delay: 0.15, duration: 0.5 }}
         >
@@ -217,14 +259,17 @@ function LandingSection() {
               <p className="text-sm text-slate-400">Live model verdict</p>
               <h2 className="mt-1 text-2xl font-semibold text-white">example.com/login</h2>
             </div>
-            <Badge className="border-teal-300/30 bg-teal-300/10 text-teal-100">Legitimate</Badge>
+            <Badge className="border-teal-300/30 bg-teal-300/10 text-teal-100">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Legitimate
+            </Badge>
           </div>
           <div className="grid gap-4 py-5 sm:grid-cols-3">
             <MiniStat label="Confidence" value="88%" />
             <MiniStat label="Signals" value="30" />
             <MiniStat label="Latency" value="1.4s" />
           </div>
-          <div className="rounded-lg border border-white/10 bg-slate-950/70 p-4">
+          <div className="rounded-lg border border-white/10 bg-black/20 p-4">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm text-slate-400">Risk activity</span>
               <Activity className="h-4 w-4 text-teal-300" />
@@ -280,17 +325,20 @@ function WorkflowSection({
   url,
   urlResult,
 }: WorkflowSectionProps) {
-  const resultTone = urlResult?.label === "Legitimate" ? "text-teal-300" : "text-red-300";
+  const resultTone = urlResult?.label === "Legitimate" ? "text-teal-600" : "text-red-600";
   const csvChartData = csvResult
     ? [
         { fill: "#ef4444", name: "Phishing", value: csvResult.phishing },
         { fill: "#14b8a6", name: "Legitimate", value: csvResult.legitimate },
       ]
     : [];
+  const csvTotal = csvResult ? Math.max(csvResult.phishing + csvResult.legitimate, 1) : 1;
+  const csvPhishingPercent = csvResult ? Math.round((csvResult.phishing / csvTotal) * 100) : 0;
+  const csvLegitimatePercent = csvResult ? 100 - csvPhishingPercent : 0;
   const previewColumns = csvResult?.preview[0] ? buildCsvPreviewColumns(Object.keys(csvResult.preview[0])) : [];
 
   return (
-    <section className="bg-slate-100 px-4 py-16 text-slate-950 sm:px-6 lg:px-8" id="analyze">
+    <section className="bg-[#f3f7f8] px-4 py-16 text-slate-950 sm:px-6 lg:px-8" id="analyze">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
@@ -298,15 +346,15 @@ function WorkflowSection({
               <Zap className="h-3.5 w-3.5 text-teal-600" />
               Main workflow
             </Badge>
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Analyze URLs and data in one clean workflow</h2>
+            <h2 className="text-3xl font-semibold sm:text-4xl">Analyze URLs and data in one clean workflow</h2>
           </div>
           <p className="max-w-xl text-sm leading-6 text-slate-600">
-            The frontend connects to FastAPI JSON endpoints and still keeps loading, success, and error states designed.
+            Single-link checks and batch scoring share the same model experience: clear inputs, fast feedback, and downloadable results.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <Card>
+          <Card className="shadow-md shadow-slate-200/70">
             <CardHeader>
               <CardTitle>Prediction input</CardTitle>
             </CardHeader>
@@ -337,10 +385,17 @@ function WorkflowSection({
                 </TabsContent>
                 <TabsContent value="csv">
                   <form className="mt-5 space-y-4" onSubmit={onCsvSubmit}>
-                    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5">
-                      <Label htmlFor="csvFile">Upload feature CSV</Label>
-                      <Input className="mt-3" id="csvFile" name="csvFile" type="file" accept=".csv,text/csv" />
-                      <p className="mt-3 text-sm text-slate-500">Use the same feature schema as the training dataset.</p>
+                    <div className="rounded-lg border border-dashed border-teal-300 bg-teal-50/50 p-5">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 place-items-center rounded-lg bg-white text-teal-700 shadow-sm">
+                          <FileSpreadsheet className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <Label htmlFor="csvFile">Feature CSV</Label>
+                          <p className="mt-1 text-sm text-slate-500">Training feature schema, comma-separated.</p>
+                        </div>
+                      </div>
+                      <Input className="mt-4 border-teal-300 bg-white" id="csvFile" name="csvFile" type="file" accept=".csv,text/csv" />
                     </div>
                     <div className="flex flex-wrap gap-3">
                       <Button disabled={isUploadingCsv} type="submit">
@@ -358,9 +413,9 @@ function WorkflowSection({
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden shadow-md shadow-slate-200/70">
             <CardHeader>
-              <CardTitle>Result display</CardTitle>
+              <CardTitle>Live result</CardTitle>
             </CardHeader>
             <CardContent>
               {activeResult === "url" && urlResult ? (
@@ -390,7 +445,7 @@ function WorkflowSection({
                   <div className="flex flex-col justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center">
                     <div>
                       <p className="text-sm text-slate-500">Batch prediction completed</p>
-                      <h3 className="text-2xl font-semibold text-slate-950">{csvResult.fileName}</h3>
+                      <h3 className="break-all text-2xl font-semibold text-slate-950">{csvResult.fileName}</h3>
                       <p className="mt-1 text-sm text-slate-500">{csvResult.outputMeta}</p>
                     </div>
                     <Button asChild variant="outline">
@@ -399,6 +454,18 @@ function WorkflowSection({
                         <Download className="h-4 w-4" />
                       </a>
                     </Button>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-700">Scored file summary</p>
+                      <p className="text-sm text-slate-500">
+                        {csvPhishingPercent}% phishing / {csvLegitimatePercent}% legitimate
+                      </p>
+                    </div>
+                    <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+                      <div className="bg-red-500" style={{ width: `${csvPhishingPercent}%` }} />
+                      <div className="bg-teal-500" style={{ width: `${csvLegitimatePercent}%` }} />
+                    </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-4">
                     <MiniStatus icon={FileSpreadsheet} label="Rows" value={csvResult.rows.toLocaleString()} />
@@ -500,11 +567,13 @@ interface DashboardSectionProps {
 }
 
 function DashboardSection({ history, signalData, status, urlResult }: DashboardSectionProps) {
+  const phishingCount = history.filter((item) => item.label === "Phishing").length;
+  const legitimateCount = history.filter((item) => item.label === "Legitimate").length;
   const systemCards = [
     { label: "Model", value: status.model.status, meta: status.model.meta, icon: BrainCircuit },
-    { label: "MongoDB", value: status.mongo.status, meta: "Data source", icon: Database },
+    { label: "MongoDB", value: status.mongo.status, meta: "Prediction history + data source", icon: Database },
     { label: "Gemini", value: status.gemini.status, meta: status.gemini.meta, icon: Sparkles },
-    { label: "Output", value: status.output.status, meta: status.output.meta, icon: Download },
+    { label: "Saved scans", value: history.length.toLocaleString(), meta: "Recent records loaded", icon: Radar },
   ];
 
   return (
@@ -516,9 +585,11 @@ function DashboardSection({ history, signalData, status, urlResult }: DashboardS
               <BarChart3 className="h-3.5 w-3.5" />
               Dashboard
             </Badge>
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Portfolio-ready monitoring view</h2>
+            <h2 className="text-3xl font-semibold sm:text-4xl">Operational monitoring view</h2>
           </div>
-          <p className="max-w-xl text-sm leading-6 text-slate-600">Status cards, signal distribution, and prediction history make the app feel complete without clutter.</p>
+          <p className="max-w-xl text-sm leading-6 text-slate-600">
+            Status, MongoDB-backed history, and signal distribution are grouped for fast scanning without crowding the page.
+          </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -534,6 +605,12 @@ function DashboardSection({ history, signalData, status, urlResult }: DashboardS
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <MiniMetric label="Phishing saved" value={phishingCount.toLocaleString()} tone="danger" />
+          <MiniMetric label="Legitimate saved" value={legitimateCount.toLocaleString()} tone="good" />
+          <MiniMetric label="Latest confidence" value={urlResult ? `${urlResult.confidence}%` : "No scans"} tone="neutral" />
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -565,15 +642,23 @@ function DashboardSection({ history, signalData, status, urlResult }: DashboardS
             <CardContent>
               {history.length ? (
                 <div className="space-y-3">
-                  {history.map((item) => (
-                    <div className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center" key={item.url}>
+                  {history.map((item, index) => (
+                    <div className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center" key={item.historyId ?? `${item.url}-${index}`}>
                       <div>
-                        <p className="font-medium">{item.hostname}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{item.hostname}</p>
+                          <span className="text-xs text-slate-400">{formatScanTime(item.createdAt)}</span>
+                        </div>
                         <p className="max-w-md truncate text-sm text-slate-500">{item.url}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item.signals.suspicious} suspicious signals / {item.confidence}% confidence
+                        </p>
                       </div>
-                      <Badge className={item.label === "Legitimate" ? "border-teal-200 bg-teal-50 text-teal-700" : "border-red-200 bg-red-50 text-red-700"}>
-                        {item.label}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className={item.label === "Legitimate" ? "border-teal-200 bg-teal-50 text-teal-700" : "border-red-200 bg-red-50 text-red-700"}>
+                          {item.label}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -595,17 +680,51 @@ function DashboardSection({ history, signalData, status, urlResult }: DashboardS
   );
 }
 
+function formatScanTime(value?: string) {
+  if (!value) {
+    return "Saved recently";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Saved recently";
+  }
+  return date.toLocaleString([], {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+  });
+}
+
+function MiniMetric({ label, tone, value }: { label: string; tone: "danger" | "good" | "neutral"; value: string }) {
+  const toneClass =
+    tone === "danger"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : tone === "good"
+        ? "border-teal-200 bg-teal-50 text-teal-700"
+        : "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <div className={`rounded-lg border p-4 ${toneClass}`}>
+      <p className="text-sm font-medium opacity-80">{label}</p>
+      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
 function FeatureSection() {
   return (
-    <section className="bg-slate-100 px-4 py-16 text-slate-950 sm:px-6 lg:px-8">
+    <section className="bg-[#f3f7f8] px-4 py-16 text-slate-950 sm:px-6 lg:px-8" id="features">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 max-w-3xl">
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Built for interviews, hackathons, and demos</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-600">The UI focuses on the ML story: what problem it solves, how the model is used, and how results can be understood.</p>
+          <h2 className="text-3xl font-semibold sm:text-4xl">What the console covers</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            A focused product surface for the core security workflow: extract signals, classify risk, and explain the result.
+          </p>
         </div>
         <div className="grid gap-5 md:grid-cols-3">
           {featureCards.map((feature) => (
-            <Card className="transition hover:-translate-y-1 hover:shadow-xl" key={feature.title}>
+            <Card className="transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/80" key={feature.title}>
               <CardContent className="p-6">
                 <feature.icon className="mb-5 h-9 w-9 text-teal-600" />
                 <h3 className="text-xl font-semibold">{feature.title}</h3>
@@ -622,7 +741,7 @@ function FeatureSection() {
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-white">{value}</p>
     </div>
   );
@@ -632,7 +751,7 @@ function MiniStatus({ icon: Icon, label, value }: { icon: LucideIcon; label: str
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <Icon className="mb-3 h-5 w-5 text-teal-600" />
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
       <p className="mt-1 truncate font-semibold">{value}</p>
     </div>
   );
@@ -643,7 +762,7 @@ function Footer() {
     <footer className="border-t border-white/10 bg-slate-950 px-4 py-8 text-slate-400 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 text-sm sm:flex-row">
         <p>Network Security Console</p>
-        <p>React, Tailwind, shadcn-style components, Framer Motion, and Recharts.</p>
+        <p>Designed for fast phishing checks and confident review.</p>
       </div>
     </footer>
   );

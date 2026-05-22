@@ -1,4 +1,4 @@
-import type { AppStatus, CsvPrediction, UrlPrediction } from "./types";
+import type { AppStatus, CsvPrediction, PredictionHistoryResponse, UrlPrediction } from "./types";
 
 const mockStatus: AppStatus = {
   gemini: { meta: "gemini-3.5-flash", ready: true, status: "Configured" },
@@ -12,6 +12,7 @@ const mockStatus: AppStatus = {
 
 const mockPrediction: UrlPrediction = {
   confidence: 84,
+  createdAt: new Date().toISOString(),
   dnsStatus: "Resolved",
   features: [
     { name: "having_IP_Address", signal: "Normal", value: 1 },
@@ -21,6 +22,7 @@ const mockPrediction: UrlPrediction = {
     { name: "Page_Rank", signal: "Suspicious", value: -1 },
   ],
   finalUrl: "https://example.com/login",
+  historyId: "mock-history-item",
   hostname: "example.com",
   htmlStatus: "Fetched",
   label: "Legitimate",
@@ -45,6 +47,12 @@ async function getStatus(): Promise<AppStatus> {
   return parseJson<AppStatus>(response);
 }
 
+async function getPredictionHistory(limit = 10): Promise<UrlPrediction[]> {
+  const response = await fetch(`/api/prediction-history?limit=${limit}`);
+  const payload = await parseJson<PredictionHistoryResponse>(response);
+  return payload.items;
+}
+
 async function predictUrl(url: string): Promise<UrlPrediction> {
   const body = new FormData();
   body.append("url", url);
@@ -65,4 +73,4 @@ async function predictCsv(file: File): Promise<CsvPrediction> {
   return parseJson<CsvPrediction>(response);
 }
 
-export { getStatus, mockPrediction, mockStatus, predictCsv, predictUrl };
+export { getPredictionHistory, getStatus, mockPrediction, mockStatus, predictCsv, predictUrl };

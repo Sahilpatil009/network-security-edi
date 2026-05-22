@@ -25,9 +25,11 @@ interface UrlFeature {
 
 interface UrlPrediction {
   confidence: number;
+  createdAt?: string;
   dnsStatus: string;
   features: UrlFeature[];
   finalUrl: string;
+  historyId?: string;
   hostname: string;
   htmlStatus: string;
   label: "Legitimate" | "Phishing";
@@ -39,6 +41,7 @@ interface UrlPrediction {
   };
   statusClass: "good" | "danger";
   summary: string;
+  suspiciousFeatures?: string[];
   url: string;
 }
 
@@ -52,4 +55,8 @@ interface CsvPrediction {
   rows: number;
 }
 
-export type { AppStatus, CsvPrediction, UrlFeature, UrlPrediction };
+interface PredictionHistoryResponse {
+  items: UrlPrediction[];
+}
+
+export type { AppStatus, CsvPrediction, PredictionHistoryResponse, UrlFeature, UrlPrediction };
