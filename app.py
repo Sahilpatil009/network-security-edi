@@ -1,16 +1,23 @@
 import sys
 import os
 import json
-from datetime import datetime, timezone
+import base64
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 
 import certifi
+from bson import ObjectId
+
 ca = certifi.where()
 
 from dotenv import load_dotenv
+
 load_dotenv()
 mongo_db_url = os.getenv("MONGODB_URL_KEY")
 print(mongo_db_url)
@@ -19,8 +26,9 @@ from networksecurity.exception.exception import NetworkSecurityException
 from networksecurity.logging.logger import logging
 
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel
 from uvicorn import run as app_run
 import pandas as pd
 
@@ -29,9 +37,15 @@ from networksecurity.utils.ml_utils.model.estimator import NetworkModel
 from networksecurity.utils.url_feature_extractor import extract_url_features
 
 
-def create_mongo_client(uri: str):
+def create_mongo_client(uri: str | None):
+    if not uri:
+        return pymongo.MongoClient()
     uri_lower = (uri or "").lower()
-    uses_tls = uri_lower.startswith("mongodb+srv://") or "tls=true" in uri_lower or "ssl=true" in uri_lower
+    uses_tls = (
+        uri_lower.startswith("mongodb+srv://")
+        or "tls=true" in uri_lower
+        or "ssl=true" in uri_lower
+    )
     if uses_tls:
         return pymongo.MongoClient(uri, tlsCAFile=ca)
     return pymongo.MongoClient(uri)
@@ -59,8 +73,15 @@ DAGSHUB_REPO_OWNER = os.getenv("DAGSHUB_REPO_OWNER", "Sahilpatil009")
 DAGSHUB_REPO_NAME = os.getenv("DAGSHUB_REPO_NAME", "network-security-edi")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-URL_PREDICTION_COLLECTION_NAME = os.getenv("URL_PREDICTION_COLLECTION_NAME", "url_prediction_history")
+URL_PREDICTION_COLLECTION_NAME = os.getenv(
+    "URL_PREDICTION_COLLECTION_NAME", "url_prediction_history"
+)
+AUTH_USER_COLLECTION_NAME = os.getenv("AUTH_USER_COLLECTION_NAME", "users")
+AUTH_SESSION_COLLECTION_NAME = os.getenv("AUTH_SESSION_COLLECTION_NAME", "user_sessions")
+AUTH_SESSION_DAYS = int(os.getenv("AUTH_SESSION_DAYS", "7"))
 url_prediction_collection = database[URL_PREDICTION_COLLECTION_NAME]
+auth_user_collection = database[AUTH_USER_COLLECTION_NAME]
+auth_session_collection = database[AUTH_SESSION_COLLECTION_NAME]
 origins = ["*"]
 
 app.add_middleware(
@@ -70,6 +91,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class AuthSignupPayload(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class AuthLoginPayload(BaseModel):
+    email: str
+    password: str
+
 
 def render_template(template_name: str, **context: str) -> HTMLResponse:
     template = (TEMPLATE_DIR / template_name).read_text(encoding="utf-8")
@@ -82,12 +115,117 @@ def file_meta(path: Path) -> str:
     if not path.exists():
         return "Not found"
     size_kb = path.stat().st_size / 1024
-    modified = datetime.fromtimestamp(path.stat().st_mtime).strftime("%d %b %Y, %I:%M %p")
+    modified = datetime.fromtimestamp(path.stat().st_mtime).strftime(
+        "%d %b %Y, %I:%M %p"
+    )
     return f"{size_kb:,.0f} KB | {modified}"
 
 
 def status_class(is_ready: bool) -> str:
     return "good" if is_ready else "warn"
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def hash_password(password: str, salt: str | None = None) -> str:
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        bytes.fromhex(salt),
+        120_000,
+    )
+    encoded_digest = base64.b64encode(digest).decode("utf-8")
+    return f"pbkdf2_sha256${salt}${encoded_digest}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        algorithm, salt, expected_digest = stored_hash.split("$", 2)
+    except ValueError:
+        return False
+    if algorithm != "pbkdf2_sha256":
+        return False
+    candidate_digest = hash_password(password, salt).split("$", 2)[2]
+    return hmac.compare_digest(candidate_digest, expected_digest)
+
+
+def validate_auth_payload(email: str, password: str, name: str | None = None):
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    if name is not None and not name.strip():
+        raise HTTPException(status_code=400, detail="Enter your name.")
+
+
+def serialize_auth_user(document: dict) -> dict:
+    created_at = document.get("createdAt")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+    return {
+        "id": str(document.get("_id", "")),
+        "name": document.get("name", ""),
+        "email": document.get("email", ""),
+        "createdAt": created_at or "",
+    }
+
+
+def create_auth_session(user_id: str) -> dict:
+    token = secrets.token_urlsafe(32)
+    created_at = datetime.now(timezone.utc)
+    expires_at = created_at + timedelta(days=AUTH_SESSION_DAYS)
+    auth_session_collection.insert_one(
+        {
+            "token": token,
+            "userId": user_id,
+            "createdAt": created_at,
+            "expiresAt": expires_at,
+        }
+    )
+    return {"token": token, "expiresAt": expires_at.isoformat()}
+
+
+def extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    prefix = "Bearer "
+    if not authorization.startswith(prefix):
+        return None
+    return authorization[len(prefix) :].strip()
+
+
+def get_user_from_authorization(authorization: str | None) -> dict | None:
+    token = extract_bearer_token(authorization)
+    if not token:
+        return None
+
+    session = auth_session_collection.find_one({"token": token})
+    if not session:
+        return None
+
+    expires_at = session.get("expiresAt")
+    if isinstance(expires_at, datetime):
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            auth_session_collection.delete_one({"_id": session.get("_id")})
+            return None
+
+    try:
+        user_id = ObjectId(session.get("userId"))
+    except Exception:
+        return None
+    return auth_user_collection.find_one({"_id": user_id})
+
+
+def require_authenticated_user(authorization: str | None) -> dict:
+    user_document = get_user_from_authorization(authorization)
+    if not user_document:
+        raise HTTPException(status_code=401, detail="Sign in to continue.")
+    return user_document
 
 
 def prediction_label(value: int) -> str:
@@ -114,7 +252,7 @@ def feature_rows(features: dict) -> str:
             "<tr>"
             f"<td>{escape(name)}</td>"
             f"<td>{value}</td>"
-            f"<td><span class=\"badge {cls}\">{signal}</span></td>"
+            f'<td><span class="badge {cls}">{signal}</span></td>'
             "</tr>"
         )
     return "".join(rows)
@@ -135,7 +273,9 @@ def local_prediction_summary(url: str, label: str, features: dict) -> str:
     )
 
 
-def explain_prediction_with_gemini(url: str, label: str, features: dict, metadata: dict) -> str:
+def explain_prediction_with_gemini(
+    url: str, label: str, features: dict, metadata: dict
+) -> str:
     fallback = local_prediction_summary(url, label, features)
     if not GEMINI_API_KEY:
         return fallback
@@ -177,10 +317,19 @@ def explain_prediction_with_gemini(url: str, label: str, features: dict, metadat
             data = json.loads(response.read().decode("utf-8"))
         parts = data["candidates"][0]["content"]["parts"]
         summary = " ".join(part.get("text", "") for part in parts).strip()
-        if len(summary) < 80 or summary.lower().rstrip(". ").endswith(("because", "include", "with")):
+        if len(summary) < 80 or summary.lower().rstrip(". ").endswith(
+            ("because", "include", "with")
+        ):
             return fallback
         return summary
-    except (HTTPError, URLError, TimeoutError, KeyError, IndexError, json.JSONDecodeError) as e:
+    except (
+        HTTPError,
+        URLError,
+        TimeoutError,
+        KeyError,
+        IndexError,
+        json.JSONDecodeError,
+    ) as e:
         return f"{fallback} Gemini summary could not be generated: {str(e)}"
 
 
@@ -227,14 +376,18 @@ def build_url_prediction(url: str) -> dict:
             {
                 "name": name,
                 "value": value,
-                "signal": "Suspicious" if value == -1 else "Neutral" if value == 0 else "Normal",
+                "signal": (
+                    "Suspicious"
+                    if value == -1
+                    else "Neutral" if value == 0 else "Normal"
+                ),
             }
             for name, value in features.items()
         ],
     }
 
 
-def save_url_prediction(result: dict) -> dict:
+def save_url_prediction(result: dict, user: dict | None = None) -> dict:
     saved_at = datetime.now(timezone.utc)
     document = {
         "url": result["url"],
@@ -256,6 +409,10 @@ def save_url_prediction(result: dict) -> dict:
         ],
         "createdAt": saved_at,
     }
+    if user:
+        document["userId"] = str(user["_id"])
+        document["userEmail"] = user.get("email", "")
+
     inserted = url_prediction_collection.insert_one(document)
     result["historyId"] = str(inserted.inserted_id)
     result["savedAt"] = saved_at.isoformat()
@@ -279,18 +436,23 @@ def serialize_url_prediction_history(document: dict) -> dict:
         "statusClass": document.get("statusClass", "danger"),
         "confidence": int(document.get("confidence", 0)),
         "summary": document.get("summary", ""),
-        "signals": document.get("signals", {"suspicious": 0, "neutral": 0, "normal": 0}),
+        "signals": document.get(
+            "signals", {"suspicious": 0, "neutral": 0, "normal": 0}
+        ),
         "features": document.get("features", []),
         "suspiciousFeatures": document.get("suspiciousFeatures", []),
         "createdAt": created_at or "",
     }
 
 
-def get_url_prediction_history(limit: int = 10) -> list:
+def get_url_prediction_history(limit: int = 10, user: dict | None = None) -> list:
+    if not user:
+        return []
+
     safe_limit = max(1, min(limit, 50))
+    query = {"userId": str(user["_id"])}
     documents = (
-        url_prediction_collection
-        .find()
+        url_prediction_collection.find(query)
         .sort("createdAt", pymongo.DESCENDING)
         .limit(safe_limit)
     )
@@ -311,10 +473,16 @@ def build_model_comparison_payload() -> dict:
     with open(MODEL_COMPARISON_JSON_PATH, "r", encoding="utf-8") as file_obj:
         payload = json.load(file_obj)
 
-    best_model = next((model for model in payload.get("models", []) if model.get("isBest")), None)
+    best_model = next(
+        (model for model in payload.get("models", []) if model.get("isBest")), None
+    )
     payload["ready"] = True
-    payload["bestModelName"] = payload.get("bestModelName") or (best_model or {}).get("modelName", "")
-    payload["bestModelScore"] = payload.get("bestModelScore") or (best_model or {}).get("testF1", 0)
+    payload["bestModelName"] = payload.get("bestModelName") or (best_model or {}).get(
+        "modelName", ""
+    )
+    payload["bestModelScore"] = payload.get("bestModelScore") or (best_model or {}).get(
+        "testF1", 0
+    )
     payload["reportMeta"] = file_meta(MODEL_COMPARISON_CSV_PATH)
     return payload
 
@@ -396,14 +564,69 @@ async def index():
 
 
 @app.get("/api/status")
-async def api_status():
+async def api_status(authorization: str | None = Header(default=None)):
+    require_authenticated_user(authorization)
     return build_status_payload()
 
 
+@app.post("/api/auth/signup")
+async def api_auth_signup(payload: AuthSignupPayload):
+    email = normalize_email(payload.email)
+    validate_auth_payload(email=email, password=payload.password, name=payload.name)
+
+    if auth_user_collection.find_one({"email": email}):
+        raise HTTPException(status_code=409, detail="An account already exists for this email.")
+
+    created_at = datetime.now(timezone.utc)
+    user_document = {
+        "name": payload.name.strip(),
+        "email": email,
+        "passwordHash": hash_password(payload.password),
+        "createdAt": created_at,
+    }
+    inserted = auth_user_collection.insert_one(user_document)
+    user_document["_id"] = inserted.inserted_id
+    session = create_auth_session(str(inserted.inserted_id))
+    return {"user": serialize_auth_user(user_document), **session}
+
+
+@app.post("/api/auth/login")
+async def api_auth_login(payload: AuthLoginPayload):
+    email = normalize_email(payload.email)
+    validate_auth_payload(email=email, password=payload.password)
+
+    user_document = auth_user_collection.find_one({"email": email})
+    if not user_document or not verify_password(payload.password, user_document.get("passwordHash", "")):
+        raise HTTPException(status_code=401, detail="Email or password is incorrect.")
+
+    session = create_auth_session(str(user_document["_id"]))
+    return {"user": serialize_auth_user(user_document), **session}
+
+
+@app.get("/api/auth/me")
+async def api_auth_me(authorization: str | None = Header(default=None)):
+    user_document = require_authenticated_user(authorization)
+    return {"user": serialize_auth_user(user_document)}
+
+
+@app.post("/api/auth/logout")
+async def api_auth_logout(authorization: str | None = Header(default=None)):
+    token = extract_bearer_token(authorization)
+    if token:
+        auth_session_collection.delete_one({"token": token})
+    return {"ok": True}
+
+
 @app.get("/api/prediction-history")
-async def api_prediction_history(limit: int = 10):
+async def api_prediction_history(limit: int = 10, authorization: str | None = Header(default=None)):
     try:
-        return {"items": get_url_prediction_history(limit)}
+        user_document = require_authenticated_user(authorization)
+        return {
+            "items": get_url_prediction_history(limit, user_document),
+            "requiresAuth": False,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         error = NetworkSecurityException(e, sys)
         return {
@@ -414,9 +637,12 @@ async def api_prediction_history(limit: int = 10):
 
 
 @app.get("/api/model-comparison")
-async def api_model_comparison():
+async def api_model_comparison(authorization: str | None = Header(default=None)):
     try:
+        require_authenticated_user(authorization)
         return build_model_comparison_payload()
+    except HTTPException:
+        raise
     except Exception as e:
         error = NetworkSecurityException(e, sys)
         return {
@@ -439,7 +665,9 @@ async def train_route():
             STATUS_CLASS="good",
             TITLE="Training completed",
             MESSAGE="The training pipeline finished successfully. New model artifacts are available for prediction.",
-            DETAIL=escape(f"MLflow tracking repo: {DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}"),
+            DETAIL=escape(
+                f"MLflow tracking repo: {DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}"
+            ),
             PRIMARY_ACTION="/",
             PRIMARY_LABEL="Back to dashboard",
             SECONDARY_ACTION="/docs",
@@ -459,13 +687,14 @@ async def train_route():
             SECONDARY_LABEL="Open API docs",
         )
 
+
 @app.post("/predict")
 async def predict_route(file: UploadFile = File(...)):
     try:
         df = pd.read_csv(file.file)
         input_df = df.drop(columns=[TARGET_COLUMN], errors="ignore")
         y_pred = predict_dataframe(input_df)
-        df['predicted_column'] = y_pred
+        df["predicted_column"] = y_pred
 
         PREDICTION_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(PREDICTION_OUTPUT_PATH, index=False)
@@ -541,10 +770,13 @@ async def predict_url_route(url: str = Form(...)):
 
 
 @app.post("/api/predict-url")
-async def api_predict_url(url: str = Form(...)):
+async def api_predict_url(url: str = Form(...), authorization: str | None = Header(default=None)):
     try:
+        user_document = require_authenticated_user(authorization)
         result = build_url_prediction(url)
-        return save_url_prediction(result)
+        return save_url_prediction(result, user_document)
+    except HTTPException:
+        raise
     except Exception as e:
         error = NetworkSecurityException(e, sys)
         return {
@@ -554,8 +786,9 @@ async def api_predict_url(url: str = Form(...)):
 
 
 @app.post("/api/predict-csv")
-async def api_predict_csv(file: UploadFile = File(...)):
+async def api_predict_csv(file: UploadFile = File(...), authorization: str | None = Header(default=None)):
     try:
+        require_authenticated_user(authorization)
         df = pd.read_csv(file.file)
         input_df = df.drop(columns=[TARGET_COLUMN], errors="ignore")
         y_pred = predict_dataframe(input_df)
@@ -575,6 +808,8 @@ async def api_predict_csv(file: UploadFile = File(...)):
             "outputMeta": file_meta(PREDICTION_OUTPUT_PATH),
             "preview": preview,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         error = NetworkSecurityException(e, sys)
         return {

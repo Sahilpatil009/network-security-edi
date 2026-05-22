@@ -5,6 +5,7 @@ from datetime import datetime
 
 import dagshub
 import mlflow
+from mlflow import sklearn as mlflow_sklearn
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
@@ -107,26 +108,32 @@ class ModelTrainer:
         return models, params, unavailable_models
 
     def track_mlflow(self, model, classification_metric, model_name: str, stage: str):
-        with mlflow.start_run(run_name=f"{model_name} {stage}"):
-            mlflow.log_param("model_name", model_name)
-            mlflow.log_param("stage", stage)
-            mlflow.log_metric("f1_score", classification_metric.f1_score)
-            mlflow.log_metric("precision_score", classification_metric.precision_score)
-            mlflow.log_metric("recall_score", classification_metric.recall_score)
-            mlflow.sklearn.log_model(model, "model")
+        try:
+            with mlflow.start_run(run_name=f"{model_name} {stage}"):
+                mlflow.log_param("model_name", model_name)
+                mlflow.log_param("stage", stage)
+                mlflow.log_metric("f1_score", classification_metric.f1_score)
+                mlflow.log_metric("precision_score", classification_metric.precision_score)
+                mlflow.log_metric("recall_score", classification_metric.recall_score)
+                mlflow_sklearn.log_model(model, "model")
+        except Exception as e:
+            logging.info(f"MLflow tracking skipped for {model_name} {stage}. Error: {str(e)}")
 
     def track_model_comparison(self, report_rows: list):
-        with mlflow.start_run(run_name="model_comparison"):
-            for row in report_rows:
-                if row["status"] != "trained":
-                    continue
-                metric_prefix = row["modelName"].lower().replace(" ", "_")
-                mlflow.log_metric(f"{metric_prefix}_test_f1", row["testF1"])
-                mlflow.log_metric(f"{metric_prefix}_test_accuracy", row["testAccuracy"])
-                mlflow.log_metric(f"{metric_prefix}_test_precision", row["testPrecision"])
-                mlflow.log_metric(f"{metric_prefix}_test_recall", row["testRecall"])
-                if row["isBest"]:
-                    mlflow.log_param("best_model_name", row["modelName"])
+        try:
+            with mlflow.start_run(run_name="model_comparison"):
+                for row in report_rows:
+                    if row["status"] != "trained":
+                        continue
+                    metric_prefix = row["modelName"].lower().replace(" ", "_")
+                    mlflow.log_metric(f"{metric_prefix}_test_f1", row["testF1"])
+                    mlflow.log_metric(f"{metric_prefix}_test_accuracy", row["testAccuracy"])
+                    mlflow.log_metric(f"{metric_prefix}_test_precision", row["testPrecision"])
+                    mlflow.log_metric(f"{metric_prefix}_test_recall", row["testRecall"])
+                    if row["isBest"]:
+                        mlflow.log_param("best_model_name", row["modelName"])
+        except Exception as e:
+            logging.info(f"MLflow model comparison tracking skipped. Error: {str(e)}")
 
     def compare_models(self, X_train, y_train, X_test, y_test):
         models, params, unavailable_models = self.build_model_candidates()
@@ -255,14 +262,15 @@ class ModelTrainer:
 
         y_train_pred = best_model.predict(X_train)
         classification_train_metric = get_classification_score(y_true=y_train, y_pred=y_train_pred)
-        self.track_mlflow(best_model, classification_train_metric, best_model_name, "train")
 
         y_test_pred = best_model.predict(x_test)
         classification_test_metric = get_classification_score(y_true=y_test, y_pred=y_test_pred)
-        self.track_mlflow(best_model, classification_test_metric, best_model_name, "test")
-        self.track_model_comparison(report_rows)
 
         report_csv_path, report_json_path = self.save_model_comparison_report(best_model_name, report_rows)
+
+        self.track_mlflow(best_model, classification_train_metric, best_model_name, "train")
+        self.track_mlflow(best_model, classification_test_metric, best_model_name, "test")
+        self.track_model_comparison(report_rows)
 
         preprocessor = load_object(file_path=self.data_transformation_artifact.transformed_object_file_path)
         model_dir_path = os.path.dirname(self.model_trainer_config.trained_model_file_path)
