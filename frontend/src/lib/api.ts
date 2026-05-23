@@ -73,15 +73,26 @@ function clearAuthToken() {
   window.localStorage.removeItem(authTokenStorageKey);
 }
 
-function authHeaders(): HeadersInit {
+function authHeaders(extraHeaders: Record<string, string> = {}): HeadersInit {
   const token = getStoredAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {
+    ...(apiBaseUrl.includes(".loca.lt") ? { "bypass-tunnel-reminder": "true" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extraHeaders,
+  };
 }
 
 async function parseJson<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => ({}))) as T & { detail?: string; error?: string; message?: string };
+  const responseText = await response.text();
+  let payload = {} as T & { detail?: string; error?: string; message?: string };
+  try {
+    payload = responseText ? JSON.parse(responseText) : payload;
+  } catch {
+    payload = {} as T & { detail?: string; error?: string; message?: string };
+  }
   if (!response.ok || payload.error) {
-    throw new Error(payload.message || payload.error || payload.detail || "Request failed.");
+    const fallbackMessage = responseText ? responseText.slice(0, 180) : `Request failed with status ${response.status}.`;
+    throw new Error(payload.message || payload.error || payload.detail || fallbackMessage);
   }
   return payload;
 }
@@ -89,7 +100,7 @@ async function parseJson<T>(response: Response): Promise<T> {
 async function requestAuth(endpoint: "/api/auth/login" | "/api/auth/signup", payload: AuthCredentials): Promise<AuthSession> {
   const response = await fetch(apiUrl(endpoint), {
     body: JSON.stringify(payload),
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     method: "POST",
   });
   const session = await parseJson<AuthSession>(response);
