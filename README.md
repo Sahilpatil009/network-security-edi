@@ -2,6 +2,26 @@
 
 Network Security Phishing Detection is a machine learning web application that analyzes website URLs and CSV feature datasets to predict whether a target is legitimate or phishing. The project includes a FastAPI backend, MongoDB storage, MLflow/DagsHub experiment tracking, model comparison, Gemini-powered result summaries, and a modern React dashboard.
 
+## 🌐 Live Demo
+
+**Frontend:** [https://frontend-eight-kappa-99.vercel.app](https://frontend-eight-kappa-99.vercel.app)
+
+> Frontend is deployed on **Vercel** and backend API is deployed on **Render** (Docker).
+
+## Screenshots
+
+### Home Page
+![Home Page](screenshots/homepage.png)
+
+### Analyze — URL & CSV Prediction
+![Analyze Page](screenshots/analyze.png)
+
+### Dashboard — Operational Monitoring
+![Dashboard](screenshots/dashboard.png)
+
+### Models — Algorithm Leaderboard
+![Models Comparison](screenshots/models.png)
+
 ## What The Project Does
 
 - Predicts phishing or legitimate websites from URL input.
@@ -276,6 +296,24 @@ Check current Git state:
 ```powershell
 git status
 ```
+
+## Deployment
+
+### Frontend (Vercel)
+
+The React frontend is deployed on Vercel.
+
+- Set `VITE_API_BASE_URL` to the backend URL in Vercel Environment Variables.
+- Vercel auto-deploys on push to `main`.
+
+### Backend (Render)
+
+The FastAPI backend is deployed on Render using Docker.
+
+- Runtime: Docker (uses the `Dockerfile` in the repo root).
+- Set `MONGODB_URL_KEY` and `GEMINI_API_KEY` as environment variables in Render.
+- Render auto-deploys on push to `main`.
+- Free tier services spin down after 15 minutes of inactivity — first request after idle takes ~30-60 seconds.
 
 ## Notes
 
